@@ -1,5 +1,7 @@
 const canvas = document.getElementById("canvas")
 const ctx = canvas.getContext("2d");
+const canvas2 = document.getElementById("canvas2")
+const ctx2 = canvas2.getContext("2d")
 
 // note that dx < 1
 function lerp(a, b, dx){
@@ -16,15 +18,40 @@ function fade(t){
 function dist(x, y){
     return Math.sqrt(x * x + y * y);
 }
+// numx is the number of vectors on each row before it loops back around.
+// the vectors are at all the integer points.
 class Perlin{
-    constructor(seed){
+    constructor(numx, seed){
+        this.numx = numx;
         this.seed = seed;
     }
-    noise(offset, startingPos, chunkSize){
-        const left = PRNG(Math.floor(offset + this.seed));
-        const right = PRNG(Math.ceil((offset + this.seed - startingPos) % chunkSize + startingPos));
-        const dx = (offset + this.seed) % 1;
-        return lerp( left * dx, right * dx, fade(dx));
+    noise(x, y){
+        const i = Math.floor(x % this.numx);
+        const j = Math.floor(y);
+        const topLeft = new vector(PRNG(this.seed + this.numx * j + i))
+        const topRight = new vector(PRNG(this.seed + this.numx * j + (i + 1) % this.numx))
+        const bottomLeft = new vector(PRNG(this.seed + this.numx * (j + 1) + i));
+        const bottomRight = new vector(PRNG(this.seed + this.numx * (j + 1) + (i + 1) % this.numx));
+
+        const dx = x % 1;
+        const dy = y % 1;
+        const v1 = new vector(dx, dy);
+        const v2 = new vector(dx - 1, dy);
+        const v3 = new vector(dx, dy - 1);
+        const v4 = new vector(dx - 1, dy - 1);
+        let topLeftNoise = v1.dot(topLeft);
+        topLeftNoise += Math.sqrt(2)
+        topLeftNoise /= 2* (Math.sqrt(2));
+        let topRightNoise = v2.dot(topRight);
+        topRightNoise += Math.sqrt(2);
+        topRightNoise /= 2 * (Math.sqrt(2))
+        let bottomLeftNoise = v3.dot(bottomLeft);
+        bottomLeftNoise += Math.sqrt(2);
+        bottomLeftNoise /= 2*Math.sqrt(2);
+        let bottomRightNoise = v4.dot(bottomRight);
+        bottomRightNoise += Math.sqrt(2);
+        bottomRightNoise /= 2*Math.sqrt(2);
+        return lerp(lerp(topLeftNoise, topRightNoise, fade(dx)), lerp(bottomLeftNoise, bottomRightNoise, fade(dx)), fade(dy));
     }
 }
 const mousePos = {
@@ -69,14 +96,14 @@ class vector {
 }
 
 class monster{
-    constructor(canvas, x, y, radius, divergence, inertia, perlin, speed){
+    constructor(canvas, x, y, radius, divergence, inertia, perlin, animationSpeed){
         this.canvas = canvas;
         this.context = canvas.getContext("2d");
         this.x = x;
         this.y = y;
         this.dx = 0;
         this.dy = 0;
-        this.speed = speed;
+        this.animationSpeed = animationSpeed;
         this.radius = radius;
         this.divergence = divergence;
         this.perlin = perlin;
@@ -101,8 +128,7 @@ class monster{
 
         this.x += this.dx;
         this.y += this.dy;
-        this.time += 1 / 1000;
-        console.log(this.x, this.y)
+        this.time += this.animationSpeed;
     }
     render() {
         const resolution = Math.PI / 24;
@@ -111,9 +137,10 @@ class monster{
         for(let i = 0; i < 2 * Math.PI; i+= resolution){
             const a = this.evaluate(i, this.time);
             const b = this.evaluate(i + resolution % Math.PI, this.time)
-            // this.context.fillRect(this.x + Math.cos(i) * a, this.y + Math.sin(i) * a, 10, 10)
             this.context.lineWidth = 5;
             this.context.lineTo(this.x + Math.cos(i + resolution) * b, this.y + Math.sin(i + resolution) * b)
+
+            this.debug(i * 800 / (2*Math.PI) + 100, this.evaluate(a))
         }
         this.context.stroke();
         this.context.fill();
@@ -122,17 +149,32 @@ class monster{
         const vect = new vector(angle);
         let ans = 0;
         const value = angle / ( 2 * Math.PI);
-        ans += Math.max(-this.radius, -this.acceleration.dot(vect));
-        ans += this.radius;
-        ans += this.perlin.noise(value + offset) * 20
+        // ans += Math.max(-this.radius, -this.acceleration.dot(vect));
+        // ans += this.radius;
+        // controls the number of control points
+
+        // 2 opposite rotating perlin noise
+        // ans += this.perlin.noise(value * this.perlin.numx + offset / 2, this.time) * 50;
+        // ans += this.perlin.noise(value * this.perlin.numx + this.perlin.numx - offset % this.perlin.numx, this.time) * 50;
+
+        // single perlin noise
+        ans += this.perlin.noise(value * this.perlin.numx, this.time) * this.divergence;
         return ans;
     }
+    debug(x, y){
+        ctx2.lineWidth=5;
+        ctx2.beginPath();
+        ctx2.moveTo(x, 180);
+        ctx2.lineTo(x, 180 - y);
+        ctx2.stroke();
+    }
 }
-const perl = new Perlin( 123, 10, 10)
-const monster1 = new monster(canvas, 200, 200, 50, 10, 10, perl, 10);
+const perl = new Perlin( 5, 10)
+const monster1 = new monster(canvas, 200, 200, 50, 100, 10, perl, 0.001);
 animate();
 function animate(){
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx2.clearRect(0, 0, canvas.width, canvas.height)
     monster1.update();
     monster1.render();
     requestAnimationFrame(animate);
