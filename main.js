@@ -149,8 +149,8 @@ class monster{
         const vect = new vector(angle);
         let ans = 0;
         const value = angle / ( 2 * Math.PI);
-        // ans += Math.max(-this.radius, -this.acceleration.dot(vect));
-        // ans += this.radius;
+        ans += Math.max(-this.radius, -this.acceleration.dot(vect));
+        ans += this.radius;
         // controls the number of control points
 
         // 2 opposite rotating perlin noise
